@@ -72,6 +72,13 @@ class TestCleanMerchants(unittest.TestCase):
         self.assertEqual(format_merchant_name("DROP-N-GO ARAPAHOE CROSSING"), "Drop-N-Go Arapahoe Crossing")
         self.assertEqual(format_merchant_name("LA CASA DULCE"), "La Casa Dulce")
 
+        # Mixed-case records with uppercase phrases
+        self.assertEqual(format_merchant_name("MEN'S DISTRICT Moreno"), "Men's District Moreno")
+        self.assertEqual(format_merchant_name("In THE LIGHT SERVICES -Susan Grau"), "In The Light Services -Susan Grau")
+        self.assertEqual(format_merchant_name("GOLDEN GATES Cushman"), "Golden Gates Cushman")
+        self.assertEqual(format_merchant_name("DROP-N-GO Arapahoe Crossing"), "Drop-N-Go Arapahoe Crossing")
+        self.assertEqual(format_merchant_name("UNIV OF HC--Bursars"), "Univ Of HC--Bursars")
+
     def test_process_merchant_record_flags(self):
         # Normal record: no attention needed
         cleaned, att, conf = process_merchant_record("LA CASA DULCE INC", "LACASADULCE@OUTLOOK.COM")

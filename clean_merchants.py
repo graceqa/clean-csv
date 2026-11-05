@@ -32,7 +32,7 @@ KNOWN_ACRONYMS = {
     'BBB', 'A/C', 'AC', 'IT', 'AI', 'CD', 'DVD', 'FM', 'AM', 'GPS', 'LED', 
     'CCTV', 'RV', 'ATV', 'UTV', 'EMS', 'EMT', 'FD', 'PD', 'HQ', 'NYC', 'SF', 
     'MIA', 'DFW', 'ATL', 'PHX', 'ORD', 'MSP', 'CLT', 'SLC', 'LAS', 'PHL', 
-    'NH', 'LV', 'MH', 'VA03', 'FDPOS', 'TCOE', 'MMIS'
+    'NH', 'LV', 'MH', 'VA03', 'FDPOS', 'TCOE', 'MMIS', 'WDAHB', 'HC'
 }
 
 # 50 US States + DC
@@ -259,13 +259,8 @@ def format_word(word: str, is_all_caps_context: bool, is_first: bool, is_last: b
     if w_upper in {'II', 'III', 'IV', 'VI', 'VII', 'VIII', 'IX', 'XI', 'XII'}:
         return w_upper
         
-    # Consonants-only words of 2-6 letters -> Acronym (e.g., BSPGC, CHS, CTR, FTS)
+    # Consonants-only words of 2-6 letters -> Acronym (e.g., BSPGC, CHS, CTR, FTS, HC)
     if len(word) >= 2 and len(word) <= 6 and not any(c in 'AEIOUaeiouYy' for c in word) and word.isalpha():
-        return w_upper
-
-    # If the original context was mixed case, and this specific word was ALL CAPS (>=2 letters),
-    # preserve it as an intentional acronym (e.g., 'Love Laced Beautique LV' or 'Sugar Troll MH')
-    if not is_all_caps_context and word.isupper() and len(word) >= 2:
         return w_upper
 
     # Surnames / Prefixes: Mc..., O'..., D'...

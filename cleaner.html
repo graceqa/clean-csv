@@ -395,7 +395,6 @@
         Data Processing Tool
       </div>
       <h1>Merchant Name Cleaner</h1>
-      <p>Clean, standardize, and format merchant names. Handles casing, acronyms, entity removal (Inc./LLC), and email-based truncation recovery.</p>
     </div>
 
     <div class="card">
@@ -490,7 +489,7 @@
       'BBB', 'A/C', 'AC', 'IT', 'AI', 'CD', 'DVD', 'FM', 'AM', 'GPS', 'LED',
       'CCTV', 'RV', 'ATV', 'UTV', 'EMS', 'EMT', 'FD', 'PD', 'HQ', 'NYC', 'SF',
       'MIA', 'DFW', 'ATL', 'PHX', 'ORD', 'MSP', 'CLT', 'SLC', 'LAS', 'PHL',
-      'NH', 'LV', 'MH', 'VA03', 'FDPOS', 'TCOE', 'MMIS'
+      'NH', 'LV', 'MH', 'VA03', 'FDPOS', 'TCOE', 'MMIS', 'WDAHB', 'HC'
     ]);
 
     const STATE_ACRONYMS = new Set([
@@ -672,11 +671,6 @@
 
       // Consonants only (Yy acts as vowel)
       if (word.length >= 2 && word.length <= 6 && !/[AEIOUaeiouYy]/.test(word) && /^[A-Za-z]+$/.test(word)) {
-        return wUpper;
-      }
-
-      // Intentional uppercase in mixed-case input
-      if (!isAllCapsContext && word === word.toUpperCase() && word.length >= 2) {
         return wUpper;
       }
 

@@ -44,14 +44,19 @@ const testCases = [
   { inName: 'FIVE ACES ADVERTISING AN', inEmail: 'FIVEACESADVERTISING@YAHOO.COM', expClean: 'Five Aces Advertising', expAtt: 'Attention' },
   { inName: 'Memorial Monuments Oak G', inEmail: 'Monumentsofla@yahoo.com', expClean: 'Memorial Monuments Oak G', expAtt: 'Attention' },
   { inName: 'OLD YELLER AUTO', inEmail: 'user@domain.com', expClean: 'Old Yeller Auto', expAtt: 'Attention' },
-  { inName: 'old acct EXTREME GAME', inEmail: 'user@domain.com', expClean: 'Old Acct EXTREME GAME', expAtt: 'Attention' },
-  { inName: 'The Bean Bandit (OLD)', inEmail: 'user@domain.com', expClean: 'The Bean Bandit (OLD)', expAtt: 'Attention' },
+  { inName: 'old acct EXTREME GAME', inEmail: 'user@domain.com', expClean: 'Old Acct Extreme Game', expAtt: 'Attention' },
+  { inName: 'The Bean Bandit (OLD)', inEmail: 'user@domain.com', expClean: 'The Bean Bandit (Old)', expAtt: 'Attention' },
   { inName: 'Drop-N-Go Arapahoe Crossing', inEmail: 'user@domain.com', expClean: 'Drop-N-Go Arapahoe Crossing', expAtt: '' },
   { inName: 'HAIR EXPRESSIONS BY STOR', inEmail: 'STORMEPRATT@AOL.COM', expClean: 'Hair Expressions By Store', expAtt: '' },
   { inName: 'MI CASA MEXICAN RESTAURA', inEmail: 'user@domain.com', expClean: 'Mi Casa Mexican Restaurant', expAtt: '' },
   { inName: 'WAGON WHEEL RANCH HUNTIN', inEmail: '', expClean: 'Wagon Wheel Ranch Huntin', expAtt: 'Attention' },
   { inName: 'CLAWDADDYS BAYOU CRAWFIS', inEmail: null, expClean: 'Clawdaddys Bayou Crawfis', expAtt: 'Attention' },
-  { inName: 'LA CASA DULCE INC', inEmail: '', expClean: 'La Casa Dulce', expAtt: '' }
+  { inName: 'LA CASA DULCE INC', inEmail: '', expClean: 'La Casa Dulce', expAtt: '' },
+  { inName: "MEN'S DISTRICT Moreno", inEmail: 'user@domain.com', expClean: "Men's District Moreno", expAtt: '' },
+  { inName: 'In THE LIGHT SERVICES -Susan Grau', inEmail: 'user@domain.com', expClean: 'In The Light Services -Susan Grau', expAtt: '' },
+  { inName: 'GOLDEN GATES Cushman', inEmail: 'user@domain.com', expClean: 'Golden Gates Cushman', expAtt: '' },
+  { inName: 'DROP-N-GO Arapahoe Crossing', inEmail: 'user@domain.com', expClean: 'Drop-N-Go Arapahoe Crossing', expAtt: '' },
+  { inName: 'UNIV OF HC--Bursars', inEmail: 'user@domain.com', expClean: 'Univ Of HC--Bursars', expAtt: '' }
 ];
 
 let failed = 0;
