@@ -355,25 +355,37 @@ def process_merchant_record(raw_name: str, email: str) -> tuple[str, str, float]
     # 1. Remove Inc. and LLC
     cleaned = remove_inc_llc(raw_name, raw_len)
     
+    # Check if last word appears truncated and required email resolution
+    words = cleaned.split()
+    last_word = words[-1] if words else ''
+    last_lower = last_word.lower()
+    last_upper = last_word.upper()
+    
+    raw_ended_with_entity = bool(re.search(r'(?i)(?:[,\s\-_]+|\b)(?:l+\.?l+\.?c+\.?|inc\.?|llc\.?|l\.l\.c\.?|i\.n\.c\.?|ll|in|i)$', raw_name))
+    hit_cutoff = (raw_len == 24 or (raw_len == 23 and raw_name.endswith(' '))) and not raw_ended_with_entity
+    
+    is_truncated_word = False
+    if hit_cutoff and last_word:
+        if len(last_word) == 1 and last_word.isalpha():
+            is_truncated_word = True
+        elif last_lower in {'and', 'or', 'of', 'the', 'for', 'in', 'at', 'with', 'by', 'an', 'a', '&'}:
+            is_truncated_word = True
+        elif last_upper in BUSINESS_COMPLETIONS:
+            is_truncated_word = True
+        elif (last_lower not in DICTIONARY_WORDS or len(last_word) <= 2) and last_upper not in KNOWN_ACRONYMS:
+            is_truncated_word = True
+
     # 2. Try completion if truncated
     completed_name, was_completed, comp_conf = try_complete_last_word(cleaned, raw_len, email)
     if was_completed:
         confidence = min(confidence, comp_conf)
-    elif raw_len >= 24:
-        # Check for truncated fragments at length 24
-        words = completed_name.split()
-        if words:
-            last = words[-1]
-            # Single letter fragment (e.g. 'Oak G' or 'Colorado S')
-            if len(last) == 1 and last.isalpha():
-                confidence = min(confidence, 0.5)
-            # Truncated conjunction or preposition (e.g. 'Take and', 'Advertising An')
-            elif last.lower() in {'and', 'or', 'of', 'the', 'for', 'in', 'at', 'with', 'by', 'an', 'a', '&'}:
-                # Strip the dangling connector for a cleaner output, but flag for Attention
-                cleaned_without_dangling = re.sub(r'(?i)\s+(?:and|or|of|the|for|in|at|with|by|an|a|&)$', '', completed_name).strip()
-                if cleaned_without_dangling:
-                    completed_name = cleaned_without_dangling
-                confidence = min(confidence, 0.5)
+    elif is_truncated_word:
+        # The name required using email to deduce the complete word, but email does not exist, was empty, or did not contain the completion
+        if last_lower in {'and', 'or', 'of', 'the', 'for', 'in', 'at', 'with', 'by', 'an', 'a', '&'}:
+            cleaned_without_dangling = re.sub(r'(?i)\s+(?:and|or|of|the|for|in|at|with|by|an|a|&)$', '', completed_name).strip()
+            if cleaned_without_dangling:
+                completed_name = cleaned_without_dangling
+        confidence = min(confidence, 0.5)
                 
     # Check suspicious characters or emoji
     if re.search(r'[♥®™\?]{2,}', raw_name):
@@ -388,44 +400,78 @@ def process_merchant_record(raw_name: str, email: str) -> tuple[str, str, float]
     return formatted, attention, confidence
 
 
-def find_column_indices(header: list[str], specified_merchant_idx: int | None = None, specified_email_idx: int | None = None) -> tuple[int, int]:
+def find_column_indices(header: list[str], specified_merchant_idx: int | None = None, specified_email_idx: int | None = None) -> tuple[int, int | None]:
     """
-    Locates the target merchant_name column (default: Column D / index 3)
-    and the owner_email column (default: Column F / index 5).
+    Locates:
+    1. The merchant_name column: finds exact 'merchant_name' or any header resembling 'merchant name'
+       (e.g., 'Merchant Name', 'merchant', 'business_name', 'dba_name', 'company_name', etc.).
+    2. The owner_email column: finds 'owner_email' or any header containing 'email'.
+       Returns None if no email column exists in the CSV (email is optional).
     """
     # 1. Locate merchant_name column
     merchant_idx = None
     if specified_merchant_idx is not None:
         merchant_idx = specified_merchant_idx
     else:
-        # If Column D (index 3) is merchant_name, prefer it as instructed
-        if len(header) > 3 and header[3].strip().lower() == 'merchant_name':
+        # Check Column D (index 3) first if it contains 'merchant' or 'name'
+        if len(header) > 3 and 'merchant' in header[3].strip().lower():
             merchant_idx = 3
         else:
-            for i, col in enumerate(header):
-                if col.strip().lower() == 'merchant_name':
-                    merchant_idx = i
-                    break
+            best_score = -1
+            best_idx = None
+            for i, raw_col in enumerate(header):
+                col_clean = re.sub(r'[^a-z0-9]+', ' ', raw_col.strip().lower()).strip()
+                score = 0
+                
+                # Priority 1: Exact normalized match for 'merchant name' or 'merchantname'
+                if col_clean in ('merchant name', 'merchantname', 'merchant'):
+                    score = 100
+                # Priority 2: Contains both 'merchant' and 'name'
+                elif 'merchant' in col_clean and 'name' in col_clean:
+                    score = 90
+                # Priority 3: Contains 'merchant'
+                elif 'merchant' in col_clean:
+                    score = 70
+                # Priority 4: Resembles business / company / store / dba name
+                elif any(term in col_clean for term in ('business name', 'company name', 'store name', 'dba name', 'dba')):
+                    score = 50
+                elif any(term in col_clean for term in ('business', 'company')):
+                    score = 30
                     
-    if merchant_idx is None:
-        raise ValueError("Could not find 'merchant_name' column in header.")
+                if score > best_score:
+                    best_score = score
+                    best_idx = i
+                    
+            if best_score > 0:
+                merchant_idx = best_idx
 
-    # 2. Locate owner_email column
+    if merchant_idx is None:
+        available = ', '.join(repr(c) for c in header[:10])
+        raise ValueError(f"Could not find a column header resembling 'merchant name'. Available columns: [{available}]")
+
+    # 2. Locate owner_email column (optional: can be None)
     email_idx = None
     if specified_email_idx is not None:
         email_idx = specified_email_idx
     else:
-        for i, col in enumerate(header):
-            if col.strip().lower() == 'owner_email':
-                email_idx = i
-                break
-        if email_idx is None:
-            # Fallback to column index 5 if header mismatch
-            if len(header) > 5 and 'email' in header[5].lower():
-                email_idx = 5
+        best_email_score = -1
+        best_email_idx = None
+        for i, raw_col in enumerate(header):
+            col_clean = re.sub(r'[^a-z0-9]+', ' ', raw_col.strip().lower()).strip()
+            score = 0
+            if col_clean in ('owner email', 'owneremail'):
+                score = 100
+            elif 'owner' in col_clean and 'email' in col_clean:
+                score = 90
+            elif 'email' in col_clean:
+                score = 70
                 
-    if email_idx is None:
-        raise ValueError("Could not find 'owner_email' column in header.")
+            if score > best_email_score:
+                best_email_score = score
+                best_email_idx = i
+                
+        if best_email_score > 0:
+            email_idx = best_email_idx
 
     return merchant_idx, email_idx
 
@@ -483,7 +529,7 @@ def process_csv(input_path: str, output_path: str, merchant_col_idx: int | None 
                 stats['total_rows'] += 1
                 
                 raw_merchant = row[merchant_idx] if len(row) > merchant_idx else ''
-                email = row[email_idx] if len(row) > email_idx else ''
+                email = row[email_idx] if (email_idx is not None and len(row) > email_idx) else ''
                 
                 cleaned_name, attention_val, confidence = process_merchant_record(raw_merchant, email)
                 

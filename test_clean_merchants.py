@@ -101,5 +101,37 @@ class TestCleanMerchants(unittest.TestCase):
         cleaned, att, conf = process_merchant_record("Memorial Monuments Oak G", "Monumentsofla@yahoo.com")
         self.assertEqual(att, "Attention")
 
+        # Truncated name requiring email, but email is missing or empty -> must flag Attention
+        cleaned, att, conf = process_merchant_record("WAGON WHEEL RANCH HUNTIN", "")
+        self.assertEqual(att, "Attention")
+
+        cleaned, att, conf = process_merchant_record("CLAWDADDYS BAYOU CRAWFIS", None)
+        self.assertEqual(att, "Attention")
+
+        # Non-truncated name with missing/empty email -> does not need attention
+        cleaned, att, conf = process_merchant_record("LA CASA DULCE INC", "")
+        self.assertEqual(att, "")
+
+    def test_find_column_indices_flexible(self):
+        from clean_merchants import find_column_indices
+        # Typical header
+        m_idx, e_idx = find_column_indices(['id', 'uuid', 'mid', 'merchant_name', 'merchant_name', 'owner_email'])
+        self.assertEqual(m_idx, 3)
+        self.assertEqual(e_idx, 5)
+
+        # Variations of merchant name
+        m_idx, e_idx = find_column_indices(['id', 'Merchant Name', 'email'])
+        self.assertEqual(m_idx, 1)
+        self.assertEqual(e_idx, 2)
+
+        m_idx, e_idx = find_column_indices(['client_id', 'BUSINESS_NAME', 'owner_email'])
+        self.assertEqual(m_idx, 1)
+        self.assertEqual(e_idx, 2)
+
+        # Missing email column -> email_idx should be None without error
+        m_idx, e_idx = find_column_indices(['store_id', 'dba_name', 'phone', 'address'])
+        self.assertEqual(m_idx, 1)
+        self.assertIsNone(e_idx)
+
 if __name__ == '__main__':
     unittest.main()

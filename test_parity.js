@@ -48,7 +48,10 @@ const testCases = [
   { inName: 'The Bean Bandit (OLD)', inEmail: 'user@domain.com', expClean: 'The Bean Bandit (OLD)', expAtt: 'Attention' },
   { inName: 'Drop-N-Go Arapahoe Crossing', inEmail: 'user@domain.com', expClean: 'Drop-N-Go Arapahoe Crossing', expAtt: '' },
   { inName: 'HAIR EXPRESSIONS BY STOR', inEmail: 'STORMEPRATT@AOL.COM', expClean: 'Hair Expressions By Store', expAtt: '' },
-  { inName: 'MI CASA MEXICAN RESTAURA', inEmail: 'user@domain.com', expClean: 'Mi Casa Mexican Restaurant', expAtt: '' }
+  { inName: 'MI CASA MEXICAN RESTAURA', inEmail: 'user@domain.com', expClean: 'Mi Casa Mexican Restaurant', expAtt: '' },
+  { inName: 'WAGON WHEEL RANCH HUNTIN', inEmail: '', expClean: 'Wagon Wheel Ranch Huntin', expAtt: 'Attention' },
+  { inName: 'CLAWDADDYS BAYOU CRAWFIS', inEmail: null, expClean: 'Clawdaddys Bayou Crawfis', expAtt: 'Attention' },
+  { inName: 'LA CASA DULCE INC', inEmail: '', expClean: 'La Casa Dulce', expAtt: '' }
 ];
 
 let failed = 0;

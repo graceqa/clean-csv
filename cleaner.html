@@ -758,24 +758,41 @@
       // 1. Remove Inc and LLC
       const cleanedEntity = removeIncLlc(trimmed, rawLen);
 
+      // Check if last word appears truncated and required email resolution
+      const words = cleanedEntity.split(/\s+/);
+      const lastWord = words.length > 0 ? words[words.length - 1] : '';
+      const lastLower = lastWord.toLowerCase();
+      const lastUpper = lastWord.toUpperCase();
+
+      const rawEndedWithEntity = /(?:[,\s\-_]+|\b)(?:l+\.?l+\.?c+\.?|inc\.?|llc\.?|l\.l\.c\.?|i\.n\.c\.?|ll|in|i)$/i.test(trimmed);
+      const hitCutoff = (rawLen === 24 || (rawLen === 23 && trimmed.endsWith(' '))) && !rawEndedWithEntity;
+
+      let isTruncatedWord = false;
+      if (hitCutoff && lastWord) {
+        if (lastWord.length === 1 && /[A-Za-z]/.test(lastWord)) {
+          isTruncatedWord = true;
+        } else if (['and', 'or', 'of', 'the', 'for', 'in', 'at', 'with', 'by', 'an', 'a', '&'].includes(lastLower)) {
+          isTruncatedWord = true;
+        } else if (BUSINESS_COMPLETIONS[lastUpper]) {
+          isTruncatedWord = true;
+        } else if ((!DICTIONARY_WORDS.has(lastLower) || lastWord.length <= 2) && !KNOWN_ACRONYMS.has(lastUpper)) {
+          isTruncatedWord = true;
+        }
+      }
+
       // 2. Try completion if truncated
       const completionResult = tryCompleteLastWord(cleanedEntity, rawLen, email);
       let completedName = completionResult.name;
 
       if (completionResult.completed) {
         confidence = Math.min(confidence, completionResult.confidence);
-      } else if (rawLen >= 24) {
-        const words = completedName.split(/\s+/);
-        if (words.length > 0) {
-          const last = words[words.length - 1];
-          if (last.length === 1 && /[A-Za-z]/.test(last)) {
-            confidence = Math.min(confidence, 0.5);
-          } else if (/^(and|or|of|the|for|in|at|with|by|an|a|&)$/i.test(last)) {
-            const strippedDangling = completedName.replace(/\s+(?:and|or|of|the|for|in|at|with|by|an|a|&)$/i, '').trim();
-            if (strippedDangling) completedName = strippedDangling;
-            confidence = Math.min(confidence, 0.5);
-          }
+      } else if (isTruncatedWord) {
+        // The name required using email to deduce the complete word, but email does not exist, was empty, or did not contain the completion
+        if (['and', 'or', 'of', 'the', 'for', 'in', 'at', 'with', 'by', 'an', 'a', '&'].includes(lastLower)) {
+          const strippedDangling = completedName.replace(/\s+(?:and|or|of|the|for|in|at|with|by|an|a|&)$/i, '').trim();
+          if (strippedDangling) completedName = strippedDangling;
         }
+        confidence = Math.min(confidence, 0.5);
       }
 
       if (/[♥®™\?]{2,}/.test(trimmed)) {
@@ -945,34 +962,58 @@
         let merchantIdx = null;
         let emailIdx = null;
 
-        // Locate merchant_name column (default index 3 / Column D)
-        if (header.length > 3 && header[3].trim().toLowerCase() === 'merchant_name') {
+        // Locate merchant_name column: exact or resembling 'merchant name'
+        if (header.length > 3 && header[3].trim().toLowerCase().includes('merchant')) {
           merchantIdx = 3;
         } else {
-          for (let i = 0; i < header.length; i++) {
-            if (header[i].trim().toLowerCase() === 'merchant_name') {
-              merchantIdx = i;
-              break;
+          let bestScore = -1;
+          let bestIdx = null;
+          header.forEach((rawCol, i) => {
+            const colClean = rawCol.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+            let score = 0;
+            if (colClean === 'merchant name' || colClean === 'merchantname' || colClean === 'merchant') {
+              score = 100;
+            } else if (colClean.includes('merchant') && colClean.includes('name')) {
+              score = 90;
+            } else if (colClean.includes('merchant')) {
+              score = 70;
+            } else if (['business name', 'company name', 'store name', 'dba name', 'dba'].some(t => colClean.includes(t))) {
+              score = 50;
+            } else if (['business', 'company'].some(t => colClean.includes(t))) {
+              score = 30;
             }
-          }
+            if (score > bestScore) {
+              bestScore = score;
+              bestIdx = i;
+            }
+          });
+          if (bestScore > 0) merchantIdx = bestIdx;
         }
 
         if (merchantIdx === null) {
-          throw new Error('Could not find required header "merchant_name" in the CSV.');
+          throw new Error('Could not find a column header resembling "merchant name" in the CSV.');
         }
 
-        // Locate owner_email column
-        for (let i = 0; i < header.length; i++) {
-          if (header[i].trim().toLowerCase() === 'owner_email') {
-            emailIdx = i;
-            break;
+        // Locate owner_email column (optional: can be null)
+        let bestEmailScore = -1;
+        let bestEmailIdx = null;
+        header.forEach((rawCol, i) => {
+          const colClean = rawCol.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+          let score = 0;
+          if (colClean === 'owner email' || colClean === 'owneremail') {
+            score = 100;
+          } else if (colClean.includes('owner') && colClean.includes('email')) {
+            score = 90;
+          } else if (colClean.includes('email')) {
+            score = 70;
           }
-        }
-        if (emailIdx === null && header.length > 5 && header[5].toLowerCase().includes('email')) {
-          emailIdx = 5;
-        }
-        if (emailIdx === null) {
-          throw new Error('Could not find required header "owner_email" in the CSV.');
+          if (score > bestEmailScore) {
+            bestEmailScore = score;
+            bestEmailIdx = i;
+          }
+        });
+        if (bestEmailScore > 0) {
+          emailIdx = bestEmailIdx;
         }
 
         // Check if there is a redundant duplicate merchant_name column at index 4 (Column E)
@@ -999,7 +1040,7 @@
           totalRecords++;
 
           const rawMerchant = row[merchantIdx] || '';
-          const email = row[emailIdx] || '';
+          const email = (emailIdx !== null && row[emailIdx]) ? row[emailIdx] : '';
 
           const res = processMerchantRecord(rawMerchant, email);
 
