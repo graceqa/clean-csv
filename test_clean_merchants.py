@@ -119,6 +119,36 @@ class TestCleanMerchants(unittest.TestCase):
         cleaned, att, conf = process_merchant_record("LA CASA DULCE INC", "")
         self.assertEqual(att, "")
 
+        # Expanding trailing Serv / Serv. to Service
+        cleaned, att, conf = process_merchant_record("Pro Master Cleaning Serv", "")
+        self.assertEqual(cleaned, "Pro Master Cleaning Service")
+
+        cleaned, att, conf = process_merchant_record("AVONDALE INSPECTION SERV", "")
+        self.assertEqual(cleaned, "Avondale Inspection Service")
+
+        # Glued compound words with digits (e.g. INKYENVY937 -> Inky Envy 937)
+        cleaned, att, conf = process_merchant_record("Inkyenvy937 LLC", "")
+        self.assertEqual(cleaned, "Inky Envy 937")
+
+        cleaned, att, conf = process_merchant_record("INKYENVY937", "")
+        self.assertEqual(cleaned, "Inky Envy 937")
+
+        # Flagging names with dotted abbreviations like F.H. / F.h.
+        cleaned, att, conf = process_merchant_record("MCCAFFERTY-SWEENEY  F.H.", "")
+        self.assertEqual(att, "Attention")
+
+        # Flagging names with MMIS prefix
+        cleaned, att, conf = process_merchant_record("MMIS CFI PROD 112719-4", "")
+        self.assertEqual(att, "Attention")
+
+        # Flagging names with DBA in the name
+        cleaned, att, conf = process_merchant_record("Faithful Roofing & Construction INC (DBA: Storm Guard of Plymouth)", "")
+        self.assertEqual(att, "Attention")
+
+        # Flagging names that remain all-capitalized (e.g. YAHWEH4U C&A)
+        cleaned, att, conf = process_merchant_record("YAHWEH4U C&A", "")
+        self.assertEqual(att, "Attention")
+
     def test_find_column_indices_flexible(self):
         from clean_merchants import find_column_indices
         # Typical header

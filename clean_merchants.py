@@ -75,6 +75,8 @@ BUSINESS_COMPLETIONS = {
     'ENTERPRIS': 'Enterprises',
     'MANAGEM': 'Management',
     'DISTRIB': 'Distribution',
+    'SERV': 'Service',
+    'SERV.': 'Service',
 }
 
 # Load system dictionary if available, with built-in fallbacks
@@ -96,14 +98,41 @@ DICTIONARY_WORDS.update([
     'logistics', 'consulting', 'contractors', 'landscaping', 'restoration', 
     'automotive', 'specialists', 'technologies', 'construction', 'recreation', 
     'photography', 'innovations', 'cleaners', 'bakery', 'jewelry', 'nursery',
-    'transportation', 'transport', 'appraisal', 'equipment'
+    'transportation', 'transport', 'appraisal', 'equipment', 'inky', 'envy',
+    'service', 'services', 'inspection', 'cleaning', 'master', 'locksmith',
+    'pay', 'core', 'warehouse', 'peanut'
 ])
+
+
+def split_glued_token(token: str) -> str:
+    """
+    Splits compound tokens with trailing numbers like INKYENVY937 -> Inky Envy 937.
+    """
+    m = re.match(r'^([a-zA-Z]+)(\d+)$', token)
+    if m:
+        letters, digits = m.group(1).lower(), m.group(2)
+        # 1. Try splitting letters into two valid dictionary words
+        for i in range(3, len(letters) - 2):
+            w1 = letters[:i]
+            w2 = letters[i:]
+            if w1 in DICTIONARY_WORDS and w2 in DICTIONARY_WORDS:
+                return f"{w1.capitalize()} {w2.capitalize()} {digits}"
+        # 2. Check if the letters part is already a dictionary word
+        if letters in DICTIONARY_WORDS:
+            return f"{letters.capitalize()} {digits}"
+    return token
+
+
+def preprocess_glued_words(text: str) -> str:
+    tokens = text.split()
+    return ' '.join(split_glued_token(t) for t in tokens)
 
 
 def remove_inc_llc(name: str, raw_len: int) -> str:
     """
     Removes 'Inc.' and 'LLC.' and variations from the merchant name.
-    Also handles cutoffs at 24 characters (e.g., ' LL' or ' IN' or ' I').
+    Also handles cutoffs at 24 characters (e.g., ' LL' or ' IN' or ' I')
+    and expands trailing 'Serv'/'Serv.' to 'Service'.
     """
     # Remove standard Inc and LLC occurrences
     t = re.sub(r'(?i)(?:,\s*|\s+|-+\s*)(?:l+\.?l+\.?c+\.?|inc\.?|llc\.?|l\.l\.c\.?|i\.n\.c\.?)(?=[,\s\(\)\-\.]|$)', '', name)
@@ -114,6 +143,8 @@ def remove_inc_llc(name: str, raw_len: int) -> str:
         t = re.sub(r'(?i)(?:,\s*|\s+|-+\s*)(?:ll|in|i)$', '', t)
     # Strip any trailing punctuation left behind
     t = re.sub(r'[, -]+$', '', t).strip()
+    # Expand trailing Serv / Serv. to Service
+    t = re.sub(r'(?i)\bserv\.?$', 'Service', t).strip()
     return t
 
 
@@ -263,6 +294,11 @@ def format_word(word: str, is_all_caps_context: bool, is_first: bool, is_last: b
     if len(word) >= 2 and len(word) <= 6 and not any(c in 'AEIOUaeiouYy' for c in word) and word.isalpha():
         return w_upper
 
+    # Hyphenated words: e.g., DROP-N-GO -> Drop-N-Go, MCCAFFERTY-SWEENEY -> McCafferty-Sweeney
+    if '-' in word:
+        subparts = word.split('-')
+        return '-'.join(format_word(sp, is_all_caps_context, False, False) for sp in subparts)
+
     # Surnames / Prefixes: Mc..., O'..., D'...
     if word.lower().startswith('mc') and len(word) > 2:
         return 'Mc' + word[2:].capitalize()
@@ -276,11 +312,6 @@ def format_word(word: str, is_all_caps_context: bool, is_first: bool, is_last: b
         return word[:-2].capitalize() + "'s"
     if word.endswith("'"):
         return word[:-1].capitalize() + "'"
-        
-    # Hyphenated words: e.g., DROP-N-GO -> Drop-N-Go
-    if '-' in word:
-        subparts = word.split('-')
-        return '-'.join(format_word(sp, is_all_caps_context, False, False) for sp in subparts)
 
     return word.capitalize()
 
@@ -297,7 +328,7 @@ def format_merchant_name(name: str, was_originally_all_caps: bool = False) -> st
     is_all_caps = was_originally_all_caps or (name == name.upper())
     
     # Split into words and punctuation/delimiters
-    tokens = re.split(r'(\s+|[,\&/\(\)])', name)
+    tokens = re.split(r'(\s+|[,\&/\(\):])', name)
     word_indices = [i for i, tok in enumerate(tokens) if any(c.isalnum() for c in tok)]
     
     out = []
@@ -333,11 +364,15 @@ def process_merchant_record(raw_name: str, email: str) -> tuple[str, str, float]
     if not raw_name:
         return '', 'Attention', 0.0
         
-    # Check for placeholder / dummy / test accounts or names containing 'old'
+    # Check for placeholder / dummy / test accounts or names containing 'old', MMIS prefix, or DBA
     if re.search(r'(?i)\b(do not use|test|temp|unknown|dummy|n/a)\b', raw_name):
         confidence = min(confidence, 0.3)
     elif re.search(r'(?i)\bold\b', raw_name):
         confidence = min(confidence, 0.4)
+    elif re.match(r'(?i)^mmis\b', raw_name):
+        confidence = min(confidence, 0.3)
+    elif re.search(r'(?i)\bdba\b', raw_name):
+        confidence = min(confidence, 0.3)
     elif re.match(r'(?i)^(none|na|\.|\?+)$', raw_name):
         confidence = min(confidence, 0.2)
         
@@ -347,8 +382,15 @@ def process_merchant_record(raw_name: str, email: str) -> tuple[str, str, float]
     if not any(c.isalpha() for c in raw_name):
         confidence = min(confidence, 0.2)
         
-    # 1. Remove Inc. and LLC
-    cleaned = remove_inc_llc(raw_name, raw_len)
+    # Preprocess glued tokens with digits (e.g. INKYENVY937 -> Inky Envy 937)
+    working_name = preprocess_glued_words(raw_name)
+
+    # 1. Remove Inc. and LLC (and expand trailing Serv to Service)
+    cleaned = remove_inc_llc(working_name, raw_len)
+    
+    # Check for dotted abbreviations/initials like F.H. / F.h.
+    if re.search(r'(?i)\b[a-z]\.[a-z]\.?', cleaned):
+        confidence = min(confidence, 0.4)
     
     # Check if last word appears truncated and required email resolution
     words = cleaned.split()
@@ -389,6 +431,10 @@ def process_merchant_record(raw_name: str, email: str) -> tuple[str, str, float]
     # 3. Format casing
     formatted = format_merchant_name(completed_name, was_originally_all_caps=is_originally_all_caps)
     
+    # If the formatted name remains all-capitalized and has letters (e.g. YAHWEH4U C&A, or unable to clean):
+    if any(c.isalpha() for c in formatted) and not any(c.islower() for c in formatted):
+        confidence = min(confidence, 0.4)
+        
     # 4. Attention flag if confidence < 70%
     attention = 'Attention' if confidence < 0.70 else ''
     

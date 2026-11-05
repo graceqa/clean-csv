@@ -56,7 +56,15 @@ const testCases = [
   { inName: 'In THE LIGHT SERVICES -Susan Grau', inEmail: 'user@domain.com', expClean: 'In The Light Services -Susan Grau', expAtt: '' },
   { inName: 'GOLDEN GATES Cushman', inEmail: 'user@domain.com', expClean: 'Golden Gates Cushman', expAtt: '' },
   { inName: 'DROP-N-GO Arapahoe Crossing', inEmail: 'user@domain.com', expClean: 'Drop-N-Go Arapahoe Crossing', expAtt: '' },
-  { inName: 'UNIV OF HC--Bursars', inEmail: 'user@domain.com', expClean: 'Univ Of HC--Bursars', expAtt: '' }
+  { inName: 'UNIV OF HC--Bursars', inEmail: 'user@domain.com', expClean: 'Univ Of HC--Bursars', expAtt: '' },
+  { inName: 'Pro Master Cleaning Serv', inEmail: '', expClean: 'Pro Master Cleaning Service', expAtt: '' },
+  { inName: 'AVONDALE INSPECTION SERV', inEmail: '', expClean: 'Avondale Inspection Service', expAtt: '' },
+  { inName: 'Inkyenvy937 LLC', inEmail: '', expClean: 'Inky Envy 937', expAtt: '' },
+  { inName: 'INKYENVY937', inEmail: '', expClean: 'Inky Envy 937', expAtt: '' },
+  { inName: 'MCCAFFERTY-SWEENEY  F.H.', inEmail: '', expClean: 'McCafferty-Sweeney F.h.', expAtt: 'Attention' },
+  { inName: 'MMIS CFI PROD 112719-4', inEmail: '', expClean: 'MMIS Cfi Prod 112719-4', expAtt: 'Attention' },
+  { inName: 'Faithful Roofing & Construction INC (DBA: Storm Guard of Plymouth)', inEmail: '', expClean: 'Faithful Roofing & Construction (DBA: Storm Guard Of Plymouth)', expAtt: 'Attention' },
+  { inName: 'YAHWEH4U C&A', inEmail: '', expClean: 'YAHWEH4U C&A', expAtt: 'Attention' }
 ];
 
 let failed = 0;

@@ -529,7 +529,9 @@
       'CONSTRUCT': 'Construction',
       'ENTERPRIS': 'Enterprises',
       'MANAGEM': 'Management',
-      'DISTRIB': 'Distribution'
+      'DISTRIB': 'Distribution',
+      'SERV': 'Service',
+      'SERV.': 'Service'
     };
 
     const DICTIONARY_WORDS = new Set([
@@ -540,12 +542,37 @@
       'automotive', 'specialists', 'technologies', 'construction', 'recreation',
       'photography', 'innovations', 'cleaners', 'bakery', 'jewelry', 'nursery',
       'transportation', 'transport', 'appraisal', 'equipment', 'art', 'well',
-      'printing', 'beauty', 'bar', 'king', 'brow', 'brows', 'group'
+      'printing', 'beauty', 'bar', 'king', 'brow', 'brows', 'group', 'inky', 'envy',
+      'service', 'services', 'inspection', 'cleaning', 'master', 'locksmith',
+      'pay', 'core', 'warehouse', 'peanut'
     ]);
 
     /* =========================================================================
        CLEANING & TRANSFORMATION FUNCTIONS
        ========================================================================= */
+
+    function splitGluedToken(token) {
+      const m = token.match(/^([a-zA-Z]+)(\d+)$/);
+      if (m) {
+        const letters = m[1].toLowerCase();
+        const digits = m[2];
+        for (let i = 3; i <= letters.length - 3; i++) {
+          const w1 = letters.slice(0, i);
+          const w2 = letters.slice(i);
+          if (DICTIONARY_WORDS.has(w1) && DICTIONARY_WORDS.has(w2)) {
+            return w1.charAt(0).toUpperCase() + w1.slice(1) + ' ' + w2.charAt(0).toUpperCase() + w2.slice(1) + ' ' + digits;
+          }
+        }
+        if (DICTIONARY_WORDS.has(letters)) {
+          return letters.charAt(0).toUpperCase() + letters.slice(1) + ' ' + digits;
+        }
+      }
+      return token;
+    }
+
+    function preprocessGluedWords(text) {
+      return text.split(/\s+/).map(splitGluedToken).join(' ');
+    }
 
     function removeIncLlc(name, rawLen) {
       let t = name.replace(/(?:,\s*|\s+|-+\s*)(?:l+\.?l+\.?c+\.?|inc\.?|llc\.?|l\.l\.c\.?|i\.n\.c\.?)(?=[,\s\(\)\-\.]|$)/gi, '');
@@ -553,7 +580,9 @@
       if (rawLen >= 24) {
         t = t.replace(/(?:,\s*|\s+|-+\s*)(?:ll|in|i)$/gi, '');
       }
-      return t.replace(/[, -]+$/, '').trim();
+      t = t.replace(/[, -]+$/, '').trim();
+      t = t.replace(/\bserv\.?$/i, 'Service').trim();
+      return t;
     }
 
     function extractEmailTokens(email) {
@@ -674,6 +703,11 @@
         return wUpper;
       }
 
+      // Hyphenated
+      if (word.includes('-')) {
+        return word.split('-').map(sp => formatWord(sp, isAllCapsContext, false, false)).join('-');
+      }
+
       // Surnames: Mc..., O'..., D'...
       if (word.toLowerCase().startsWith('mc') && word.length > 2) {
         return 'Mc' + word.charAt(2).toUpperCase() + word.slice(3).toLowerCase();
@@ -693,11 +727,6 @@
         return word.slice(0, -1).charAt(0).toUpperCase() + word.slice(1, -1).toLowerCase() + "'";
       }
 
-      // Hyphenated
-      if (word.includes('-')) {
-        return word.split('-').map(sp => formatWord(sp, isAllCapsContext, false, false)).join('-');
-      }
-
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     }
 
@@ -706,7 +735,7 @@
       if (!trimmed) return '';
 
       const isAllCaps = wasOriginallyAllCaps || (trimmed === trimmed.toUpperCase());
-      const tokens = trimmed.split(/(\s+|[,\&/\(\)])/);
+      const tokens = trimmed.split(/(\s+|[,\&/\(\):])/);
       const wordIndices = [];
       tokens.forEach((tok, i) => {
         if (/[A-Za-z0-9]/.test(tok)) wordIndices.push(i);
@@ -737,11 +766,15 @@
         return { cleaned: '', attention: 'Attention', confidence: 0.0 };
       }
 
-      // Check placeholder / dummy / test accounts or names containing 'old'
+      // Check placeholder / dummy / test accounts, names containing 'old', MMIS prefix, or DBA
       if (/\b(do not use|test|temp|unknown|dummy|n\/a)\b/i.test(trimmed)) {
         confidence = Math.min(confidence, 0.3);
       } else if (/\bold\b/i.test(trimmed)) {
         confidence = Math.min(confidence, 0.4);
+      } else if (/^mmis\b/i.test(trimmed)) {
+        confidence = Math.min(confidence, 0.3);
+      } else if (/\bdba\b/i.test(trimmed)) {
+        confidence = Math.min(confidence, 0.3);
       } else if (/^(none|na|\.|\?+)$/i.test(trimmed)) {
         confidence = Math.min(confidence, 0.2);
       }
@@ -749,8 +782,16 @@
       if (trimmed.length <= 2) confidence = Math.min(confidence, 0.4);
       if (!/[A-Za-z]/.test(trimmed)) confidence = Math.min(confidence, 0.2);
 
-      // 1. Remove Inc and LLC
-      const cleanedEntity = removeIncLlc(trimmed, rawLen);
+      // Preprocess glued tokens with digits (e.g. INKYENVY937 -> Inky Envy 937)
+      const workingName = preprocessGluedWords(trimmed);
+
+      // 1. Remove Inc and LLC (and expand trailing Serv to Service)
+      const cleanedEntity = removeIncLlc(workingName, rawLen);
+
+      // Check for dotted abbreviations/initials like F.H. / F.h.
+      if (/\b[a-z]\.[a-z]\.?/i.test(cleanedEntity)) {
+        confidence = Math.min(confidence, 0.4);
+      }
 
       // Check if last word appears truncated and required email resolution
       const words = cleanedEntity.split(/\s+/);
@@ -795,6 +836,11 @@
 
       // 3. Format casing
       const formatted = formatMerchantName(completedName, isOriginallyAllCaps);
+
+      // If the formatted name remains all-capitalized and has letters (e.g. YAHWEH4U C&A, or unable to clean):
+      if (/[A-Za-z]/.test(formatted) && !/[a-z]/.test(formatted)) {
+        confidence = Math.min(confidence, 0.4);
+      }
 
       // 4. Attention flag
       const attention = confidence < 0.70 ? 'Attention' : '';
